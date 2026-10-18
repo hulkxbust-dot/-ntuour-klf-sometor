@@ -1,0 +1,31 @@
+name: Publish APK
+on:
+  push:
+    paths:
+      - 'packages/*/manifest.json'
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify and join APK
+        run: |
+          python3 - <<'PY'
+          import pathlib,json,hashlib
+          for mf in sorted(pathlib.Path('packages').glob('*/manifest.json')):
+              m=json.loads(mf.read_text())
+              out=pathlib.Path(m['filename'])
+              with out.open('wb') as f:
+                  for item in m['parts']:
+                      data=(mf.parent/item['filename']).read_bytes()
+                      assert hashlib.sha256(data).hexdigest()==item['sha256']
+                      f.write(data)
+              assert out.stat().st_size==m['size_bytes']
+              assert hashlib.sha256(out.read_bytes()).hexdigest()==m['sha256']
+          PY
+      - name: Publish v0.1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create v0.1 v0.1-Internet-Cafe-Simulator-arm64.apk --title 'v0.1 Android arm64 test APK' --notes 'Signed Godot 4.5.1 Android test build. Visual and control checks were run on Linux; physical Android/FPS tests have not been performed. The original 3.7-second stall cause remains unproven.'
